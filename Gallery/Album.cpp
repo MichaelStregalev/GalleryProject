@@ -140,11 +140,16 @@ bool Album::operator==(const Album& other) const
 }
 
 
-
+/*
+Operator << is responsible for how an object will be printed
+Which means, we can control how the album class will be printed - and we can add the creation time to also be included!
+This is how we will fix the bug of the creation time not being included in List Albums.
+*/
 std::ostream& operator<<(std::ostream& strOut, const Album& album)
 {
 	strOut << "[" << album.m_name << "] - created by user@"
-		<< const_cast<Album&>(album).getOwnerId() << std::endl;
+		<< const_cast<Album&>(album).getOwnerId() << " on " 
+		<< const_cast<Album&>(album).getCreationDate() << std::endl;
 	
 	return strOut;
 }
