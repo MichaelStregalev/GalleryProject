@@ -295,21 +295,21 @@ void AlbumManager::addUser()
 	std::cout << "User " << name << " with id @" << user.getId() << " created successfully." << std::endl;
 }
 
-
 void AlbumManager::removeUser()
 {
-	// get user name
 	std::string userIdStr = getInputFromConsole("Enter user id: ");
 	int userId = std::stoi(userIdStr);
-	if ( !m_dataAccess.doesUserExists(userId) ) {
+	if ( !m_dataAccess.doesUserExists(userId) ) 
+	{
 		throw MyException("Error: There is no user with id @" + userIdStr + "\n");
 	}
 	const User& user = m_dataAccess.getUser(userId);
-	if (isCurrentAlbumSet() && userId == m_openAlbum.getOwnerId()) {
+	if (isCurrentAlbumSet() && userId == m_openAlbum.getOwnerId()) 
+	{
 		closeAlbum();
 	}
 
-	m_dataAccess.deleteUser(user);
+	m_dataAccess.deleteUser(user);	// This is where the user gets deleted from the data!
 	std::cout << "User @" << userId << " deleted successfully." << std::endl;
 }
 
@@ -318,6 +318,10 @@ void AlbumManager::listUsers()
 	m_dataAccess.printUsers();	
 }
 
+/*
+This function is the one responsible for printing the user's statistics,
+which means we can also include here the count of albums owned by there user - and by that we fix the bug very easily!
+*/
 void AlbumManager::userStatistics()
 {
 	std::string userIdStr = getInputFromConsole("Enter user id: ");
@@ -329,9 +333,10 @@ void AlbumManager::userStatistics()
 	const User& user = m_dataAccess.getUser(userId);
 
 	std::cout << "user @" << userId << " Statistics:" << std::endl << "--------------------" << std::endl <<
+		"  + Count of Albums Owned: " << m_dataAccess.countAlbumsOwnedOfUser(user) << std::endl <<
 		"  + Count of Albums Tagged: " << m_dataAccess.countAlbumsTaggedOfUser(user) << std::endl <<
 		"  + Count of Tags: " << m_dataAccess.countTagsOfUser(user) << std::endl <<
-		"  + Avarage Tags per Alboum: " << m_dataAccess.averageTagsPerAlbumOfUser(user) << std::endl;
+		"  + Average Tags per Alboum: " << m_dataAccess.averageTagsPerAlbumOfUser(user) << std::endl;
 }
 
 
