@@ -30,6 +30,8 @@ int getCommandNumberFromUser()
 
 int main(void)
 {
+	// Starting to work on V1.0.1
+
 	// initialization data access
 	MemoryAccess dataAccess;
 
