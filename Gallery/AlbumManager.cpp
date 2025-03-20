@@ -318,6 +318,10 @@ void AlbumManager::listUsers()
 	m_dataAccess.printUsers();	
 }
 
+/*
+This function is the one responsible for printing the user's statistics,
+which means we can also include here the count of albums owned by there user - and by that we fix the bug very easily!
+*/
 void AlbumManager::userStatistics()
 {
 	std::string userIdStr = getInputFromConsole("Enter user id: ");
@@ -329,9 +333,10 @@ void AlbumManager::userStatistics()
 	const User& user = m_dataAccess.getUser(userId);
 
 	std::cout << "user @" << userId << " Statistics:" << std::endl << "--------------------" << std::endl <<
+		"  + Count of Albums Owned: " << m_dataAccess.countAlbumsOwnedOfUser(user) << std::endl <<
 		"  + Count of Albums Tagged: " << m_dataAccess.countAlbumsTaggedOfUser(user) << std::endl <<
 		"  + Count of Tags: " << m_dataAccess.countTagsOfUser(user) << std::endl <<
-		"  + Avarage Tags per Alboum: " << m_dataAccess.averageTagsPerAlbumOfUser(user) << std::endl;
+		"  + Average Tags per Alboum: " << m_dataAccess.averageTagsPerAlbumOfUser(user) << std::endl;
 }
 
 
