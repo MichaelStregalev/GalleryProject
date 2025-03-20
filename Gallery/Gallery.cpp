@@ -1,5 +1,7 @@
 #include <iostream>
 #include <string>
+#include <iomanip>	// Will help us format the time
+#include <ctime>	// Will help us get the current time
 #include "MemoryAccess.h"
 #include "AlbumManager.h"
 
@@ -30,7 +32,9 @@ int getCommandNumberFromUser()
 
 int main(void)
 {
-	// Starting to work on V1.0.1
+	// Get the current time
+	std::time_t currentTime = std::time(nullptr);		// presented as UTC - need to convert to local time
+	std::tm localTime = *std::localtime(&currentTime);	// Convert to local time (* since std::localtime returns a pointer)
 
 	// initialization data access
 	MemoryAccess dataAccess;
@@ -41,6 +45,14 @@ int main(void)
 
 	std::string albumName;
 	std::cout << "Welcome to Gallery!" << std::endl;
+	std::cout << "\nBy Michael Stregalev" << std::endl;	// Name of programmer (me!)
+	// Print in the required format of the current time
+	std::cout << std::put_time(&localTime, "%H:%M | %d/%m/%Y") << std::endl;
+	// %H - current hour in a 24-hour format (00-23)
+	// %M - current minutes (0-59)
+	// %d - day in the month (01-31)
+	// %m - month in the year (01-12)
+	// %Y - full current year
 	std::cout << "===================" << std::endl;
 	std::cout << "Type " << HELP << " to a list of all supported commands" << std::endl;
 	
@@ -55,5 +67,3 @@ int main(void)
 	} 
 	while (true);
 }
-
-
