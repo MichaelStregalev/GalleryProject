@@ -308,9 +308,22 @@ void AlbumManager::removeUser()
 	if (isCurrentAlbumSet() && userId == m_openAlbum.getOwnerId()) {
 		closeAlbum();
 	}
+	
+	// We will get the list of all the albums of the user we want to delete
+	std::list<Album> albumsOfUser = m_dataAccess.getAlbumsOfUser(user);
 
-	m_dataAccess.deleteUser(user);
+	m_dataAccess.deleteUser(user);	// This is where the user gets deleted from the data!
 	std::cout << "User @" << userId << " deleted successfully." << std::endl;
+
+	// But where does the user's albums get deleted? We need to delete them!
+	// Going through all of the albums the user owns - and deleting each one!
+	for (const Album& album : albumsOfUser)
+	{
+		m_dataAccess.deleteAlbum(album.getName(), user.getId());
+	}
+
+	// Another issue - when a user is removed, it should also be untagged out of any pictures he has been tagged in!
+
 }
 
 void AlbumManager::listUsers()
