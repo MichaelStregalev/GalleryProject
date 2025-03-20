@@ -179,17 +179,55 @@ void MemoryAccess::createUser(User& user)
 	m_users.push_back(user);
 }
 
+/*
+This function is reponsible for removing a user entirely from the data,
+which means we will need to make a few changes in this function in order to prevent logical errors in the program
+after a user has been removed!
+*/
 void MemoryAccess::deleteUser(const User& user)
 {
 	if (doesUserExists(user.getId())) {
 	
-		for (auto iter = m_users.begin(); iter != m_users.end(); ++iter) {
-			if (*iter == user) {
+		for (auto iter = m_users.begin(); iter != m_users.end(); ++iter) 
+		{
+			if (*iter == user) 
+			{
 				iter = m_users.erase(iter);
-				return;
+				break;
+			}
+		}
+
+		// We deleted the user - now lets delete all of the information he is included in!
+
+		// But where does the user's albums get deleted? We need to delete them!
+		// We will get the list of all the albums of the user we want to delete
+		std::list<Album> albumsOfUser = getAlbumsOfUser(user);
+
+		// Going through all of the albums the user owns - and deleting each one!
+		for (const Album& album : albumsOfUser)
+		{
+			deleteAlbum(album.getName(), user.getId());
+		}
+
+		// Another issue - when a user is removed, the user should also be untagged out of any pictures he has been tagged in!
+		// We will also get the list of all the pictures the user was tagged in
+		std::list<Picture> picturesUserWasTagged = getTaggedPicturesOfUser(user);
+
+		// Going through all of the pictures the user was tagged in
+		for (Picture& picture : picturesUserWasTagged)
+		{
+			// Going through all of the albums in the system (thats why we deleted the user's album before doing this)
+			for (const Album& album : m_albums)
+			{
+				// If the album contains the picture - we can untag the user!
+				if (album.doesPictureExists(picture.getName()))
+				{
+					untagUserInPicture(album.getName(), picture.getName(), user.getId());
+				}
 			}
 		}
 	}
+	return;
 }
 
 bool MemoryAccess::doesUserExists(int userId) 
