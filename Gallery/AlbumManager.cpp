@@ -295,21 +295,21 @@ void AlbumManager::addUser()
 	std::cout << "User " << name << " with id @" << user.getId() << " created successfully." << std::endl;
 }
 
-
 void AlbumManager::removeUser()
 {
-	// get user name
 	std::string userIdStr = getInputFromConsole("Enter user id: ");
 	int userId = std::stoi(userIdStr);
-	if ( !m_dataAccess.doesUserExists(userId) ) {
+	if ( !m_dataAccess.doesUserExists(userId) ) 
+	{
 		throw MyException("Error: There is no user with id @" + userIdStr + "\n");
 	}
 	const User& user = m_dataAccess.getUser(userId);
-	if (isCurrentAlbumSet() && userId == m_openAlbum.getOwnerId()) {
+	if (isCurrentAlbumSet() && userId == m_openAlbum.getOwnerId()) 
+	{
 		closeAlbum();
 	}
 
-	m_dataAccess.deleteUser(user);
+	m_dataAccess.deleteUser(user);	// This is where the user gets deleted from the data!
 	std::cout << "User @" << userId << " deleted successfully." << std::endl;
 }
 
