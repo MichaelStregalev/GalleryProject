@@ -56,6 +56,9 @@ void printDetails()
 
 int main(void)
 {
+	// V1.0.1
+	// Starting to fix bugs in the commands!
+	
 	// initialization data access
 	MemoryAccess dataAccess;
 
