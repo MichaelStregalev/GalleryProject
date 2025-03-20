@@ -295,7 +295,11 @@ void AlbumManager::addUser()
 	std::cout << "User " << name << " with id @" << user.getId() << " created successfully." << std::endl;
 }
 
-
+/*
+This function is reponsible for removing a user entirely from the data,
+which means we will need to make a few changes in this function in order to prevent logical errors in the program
+after a user has been removed!
+*/
 void AlbumManager::removeUser()
 {
 	// get user name
