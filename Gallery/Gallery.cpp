@@ -56,8 +56,8 @@ void printDetails()
 
 int main(void)
 {
-	// V1.0.1
-	// Starting to fix bugs in the commands!
+	// V1.0.2
+	// Starting to build DatabaseAccess!
 	
 	// initialization data access
 	MemoryAccess dataAccess;
