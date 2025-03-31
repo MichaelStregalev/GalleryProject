@@ -2,6 +2,7 @@
 
 #include "IDataAccess.h"
 #include "sqlite3.h"
+#include <string.h>
 
 // Define const presenting the Gallery's DB file!
 #define DB_FILE "GalleryDB.sqlite"
@@ -20,7 +21,7 @@ public:
 
 	virtual bool open() override;			// open the database
 	virtual void close() override;			// close the database
-	virtual void clear() override;			// clear the data from the whole database
+	virtual void clear() override;			// clear all dynamically allocated objects
 
 private:
 
@@ -32,4 +33,7 @@ private:
 
 	bool initializeDatabase();				// initialize the database - won't cause errors even if already initialized
 											// Returns true if initialization done successfully - otherwise false.
+
+	// HELPER METHOD - EXECUTE SQL QUERIES, RETURN TRUE OR FALSE IF IT DID OR DID NOT WORK SUCCESSFULLY
+	bool executeSQL(const std::string& query);
 };

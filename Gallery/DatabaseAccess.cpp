@@ -31,12 +31,26 @@ bool DatabaseAccess::open()
         return false;
     }
 
-    // Enabling foreign keys! CRITICAL - WITHOUT IT FOREIGN KEYS WON'T BE RECOGNIZED!!
-    // This will enable us to use on delete casade - which is crucial!!
-    sqlite3_exec(_db, "PRAGMA foreign_keys = ON;", nullptr, nullptr, nullptr);
+    // Enabling foreign keys! CRITICAL - WITHOUT IT FOREIGN KEYS WON'T BE RECOGNIZED (as they are disabled in default)!!
+    // This will enable us to use ON DELETE CASADE - which is crucial!!
+    // If it doesn't work - a crucial part of the opening of the database hasn't been successful!
+    if (!executeSQL("PRAGMA foreign_keys = ON;"))
+    {
+        std::cout << "Failed to enable foreign keys." << std::endl;
+        close();    // close - as the database is already opened.
+        return false;
+    }
 
-    initializeDatabase();   // Initializing the tables for the database!
+    // Initializing the tables for the database!
+    // If it does not initalize successfully - return false.
+    if (!initializeDatabase())
+    {
+        std::cout << "Failed to initialize database." << std::endl;
+        close();    // close - as the database is already opened.
+        return false;
+    }
 
+    // If we got here - we successfully opened our database
     return true;
 
 }
@@ -52,39 +66,19 @@ void DatabaseAccess::close()
 	}
 }
 
-// CLEAR THE DATABASE FROM ALL DATA, BUT KEEP THE TABLES
+// CLEAR ALL OBJECTS THAT WE DYNAMICALLY ALLOCATED
+// as of right now, it is empty - as we did not dynamically allocate any object.
 void DatabaseAccess::clear()
 {
-    // Will only be able to clear in case the database is open...
-    if (_db != nullptr)
-    {
-        const char* clearTables[] = 
-        {
-            "DELETE FROM PICTURES;",
-            "DELETE FROM ALBUMS;",
-            "DELETE FROM USERS;",
-            "DELETE FROM TAGS;"
-        };
-
-        char* errMessage = nullptr;
-
-        for (int i = 0; i < TABLE_AMOUNT; ++i) 
-        {
-            if (sqlite3_exec(_db, clearTables[i], nullptr, nullptr, &errMessage) != SQLITE_OK)
-            {
-                std::cout << "Clear failed: " << errMessage << std::endl;
-                sqlite3_free(errMessage);
-                break;
-            }
-        }
-    }
+    
 }
 
 bool DatabaseAccess::initializeDatabase()
 {
-    // Initialization query of all 4 tables
+    // Initialization of the 4 tables
+    // If it doesn't work - return false.
 
-    const char* createTables = R"(
+    if (!executeSQL(R"(
             CREATE TABLE IF NOT EXISTS USERS(
                 ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 NAME TEXT NOT NULL
@@ -115,18 +109,29 @@ bool DatabaseAccess::initializeDatabase()
                 FOREIGN KEY (USER_ID) REFERENCES USERS(ID) ON DELETE CASCADE,
                 UNIQUE(PICTURE_ID, USER_ID)
             );
-        )";
-
-    char* errMessage = nullptr;
-
-    // Execute the query
-    int res = sqlite3_exec(_db, createTables, nullptr, nullptr, &errMessage);
-
-    // If the query lead to an error...
-    if (res != SQLITE_OK)
+        )"))
     {
-        std::cout << "Initilization of tables failed: " << errMessage << std::endl;
-        sqlite3_free(errMessage);
+        return false;
+    }
+    
+    return true;
+}
+
+bool DatabaseAccess::executeSQL(const std::string& query)
+{
+    // Before executing - we will check that the database is open
+    if (_db == nullptr) 
+    {
+        return false;
+    }
+
+    char* errMsg = nullptr;
+    int result = sqlite3_exec(_db, query.c_str(), nullptr, nullptr, &errMsg);
+
+    // Check if the execution has been done successfully
+    if (result != SQLITE_OK)
+    {
+        sqlite3_free(errMsg);
         return false;
     }
 
