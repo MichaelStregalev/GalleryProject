@@ -2,6 +2,7 @@
 
 #include "IDataAccess.h"
 #include "sqlite3.h"
+#include "User.h"
 #include <string.h>
 
 // Define const presenting the Gallery's DB file!
@@ -22,6 +23,14 @@ public:
 	virtual bool open() override;			// open the database
 	virtual void close() override;			// close the database
 	virtual void clear() override;			// clear all dynamically allocated objects
+
+	// METHODS - LEVEL 2 OF V1.0.2
+
+	virtual void deleteAlbum(const std::string& albumName, int userId);
+	virtual void tagUserInPicture(const std::string& albumName, const std::string& pictureName, int userId);
+	virtual void untagUserInPicture(const std::string& albumName, const std::string& pictureName, int userId);
+	virtual void createUser(const User& user);
+	virtual void deleteUser(const User& user);
 
 private:
 
