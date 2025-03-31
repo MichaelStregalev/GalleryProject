@@ -174,7 +174,7 @@ User MemoryAccess::getUser(int userId) {
 	throw ItemNotFoundException("User", userId);
 }
 
-void MemoryAccess::createUser(User& user)
+void MemoryAccess::createUser(const User& user)
 {
 	m_users.push_back(user);
 }

@@ -17,7 +17,7 @@ DatabaseAccess::~DatabaseAccess()
 bool DatabaseAccess::open()
 {
     // Checking if already open another database
-    if (_db != nullptr) 
+    if (_db) 
     {  
         return true;
     }
@@ -59,7 +59,7 @@ bool DatabaseAccess::open()
 void DatabaseAccess::close()
 {
 	// Check if _db points to an open database - if it does, close it :)
-	if (_db != nullptr)
+	if (_db)
 	{
 		sqlite3_close(_db);
 		_db = nullptr;
@@ -71,6 +71,125 @@ void DatabaseAccess::close()
 void DatabaseAccess::clear()
 {
     
+}
+
+// DELETE AN ALBUM WHEN GIVEN ITS NAME AND OWNER'S ID
+void DatabaseAccess::deleteAlbum(const std::string& albumName, int userId)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        std::cout << "The database is not open!" << std::endl;
+        return;
+    }
+
+    // Parsing the SQL query..
+    std::string sqlQuery = "DELETE FROM ALBUMS WHERE ID = (SELECT ID FROM ALBUMS WHERE USER_ID = " +
+                            std::to_string(userId) + " AND NAME = \"" + albumName + "\" LIMIT 1);";
+
+    if (!executeSQL(sqlQuery))
+    {
+        std::cout << "Error occurred while trying to delete an album." << std::endl;
+    }
+}
+
+// ADD A TAG OF A USER INTO A PICTURE
+void DatabaseAccess::tagUserInPicture(const std::string& albumName, const std::string& pictureName, int userId)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        std::cout << "The database is not open!" << std::endl;
+        return;
+    }
+
+    // Parsing the SQL query
+    std::string sqlQuery = 
+        "INSERT INTO TAGS (PICTURE_ID, USER_ID) VALUES(("
+        "SELECT PICTURES.ID FROM PICTURES "
+        "INNER JOIN ALBUMS ON PICTURES.ALBUM_ID = ALBUMS.ID "
+        "WHERE ALBUMS.NAME = \"" + albumName + "\" "
+        "AND PICTURES.NAME = \"" + pictureName + "\" "
+        "LIMIT 1), " + std::to_string(userId) + ");";
+
+    if (!executeSQL(sqlQuery))
+    {
+        std::cout << "Error occurred while trying to tag a user in a picture." << std::endl;
+    }
+}
+
+// UNTAG A USER FROM A PICTURE
+void DatabaseAccess::untagUserInPicture(const std::string& albumName, const std::string& pictureName, int userId)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        std::cout << "The database is not open!" << std::endl;
+        return;
+    }
+
+    // Parsing the SQL query
+    std::string sqlQuery =
+        "DELETE FROM TAGS WHERE USER_ID = " + std::to_string(userId) + " "
+        "AND PICTURE_ID = ("
+        "SELECT PICTURES.ID FROM PICTURES "
+        "INNER JOIN ALBUMS ON PICTURES.ALBUM_ID = ALBUMS.ID "
+        "WHERE ALBUMS.NAME = \"" + albumName + "\" "
+        "AND PICTURES.NAME = \"" + pictureName + "\" "
+        "LIMIT 1"
+        ");";
+
+    // Execute the query
+    if (!executeSQL(sqlQuery))
+    {
+        std::cout << "Error occurred while trying to untag user from picture." << std::endl;
+    }
+}
+
+// CREATE A USER BASED ON A USER OBJECT
+void DatabaseAccess::createUser(const User& user)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        std::cout << "The database is not open!" << std::endl;
+        return;
+    }
+
+    // Parsing the SQL query
+    std::string sqlQuery = "INSERT INTO USERS (ID, NAME) VALUES (" +
+                            std::to_string(user.getId()) + ", \"" +
+                            user.getName() + "\");";
+
+    // Execute the query
+    if (!executeSQL(sqlQuery))
+    {
+        std::cout << "Error occurred while trying to create a user." << std::endl;
+    }
+}
+
+// DELETE A USER BASED ON A USER OBJECT
+void DatabaseAccess::deleteUser(const User& user)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        std::cout << "The database is not open!" << std::endl;
+        return;
+    }
+
+    // Parsing the SQL query
+    std::string sqlQuery = "DELETE FROM USERS WHERE ID = " +
+                            std::to_string(user.getId()) + ";";
+
+    // This will also delete all memory of the user - including albums, pictures, and tags that include the user's id!
+    // Since i added onto the scheme the ON DELETE CASADE constraint, which when deleting a user will trigger casading deletions.
+
+    // Execute the query
+    if (!executeSQL(sqlQuery))
+    {
+        std::cout << "Error occurred while trying to delete a user." << std::endl;
+    }
 }
 
 bool DatabaseAccess::initializeDatabase()
@@ -120,7 +239,7 @@ bool DatabaseAccess::initializeDatabase()
 bool DatabaseAccess::executeSQL(const std::string& query)
 {
     // Before executing - we will check that the database is open
-    if (_db == nullptr) 
+    if (!_db) 
     {
         return false;
     }
