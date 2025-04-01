@@ -2,7 +2,8 @@
 #include <sstream>
 #include "MyException.h"
 
-class ItemNotFoundException : public MyException {
+class ItemNotFoundException : public MyException 
+{
 public:
 	ItemNotFoundException(const std::string& item, int user_id) : MyException(item), 
 																  m_id(user_id), m_name("") {}

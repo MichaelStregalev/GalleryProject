@@ -3,7 +3,10 @@
 #include "IDataAccess.h"
 #include "sqlite3.h"
 #include "User.h"
+#include "Album.h"
+#include <list>
 #include <string.h>
+#include <unordered_map>
 
 // Define const presenting the Gallery's DB file!
 #define DB_FILE "GalleryDB.sqlite"
@@ -32,11 +35,19 @@ public:
 	virtual void createUser(const User& user);
 	virtual void deleteUser(const User& user);
 
+	// METHODS - LEVEL 3 OF V1.0.2
+
+	virtual const std::list<Album> getAlbums();
+
+
 private:
 
-	// FIELDS
+	// FIELDS!!
+	
 	// The DB itself
 	sqlite3* _db;
+
+
 
 	// PRIVATE METHODS FOR MAKING THE REST EFFICIENT
 
@@ -45,4 +56,37 @@ private:
 
 	// HELPER METHOD - EXECUTE SQL QUERIES, RETURN TRUE OR FALSE IF IT DID OR DID NOT WORK SUCCESSFULLY
 	bool executeSQL(const std::string& query);
+
+
+	// CALLBACK FUNCTIONS
+
+	// Callback function of getting albums onto a list
+	static int albumsCallBack(void* data, int argc, char** argv, char** azColName);
+	// Callback function of getting all the pictures inside an album
+	static int picturesCallback(void* data, int argc, char** argv, char** colNames);
+	// Callback function of tagging a user in a picture given to it
+	static int tagsCallBack(void* data, int argc, char** argv, char** azColName);
+
+
+
+	// STRUCTURES THAT WILL HELP US IN THE CALLBACK FUNCTIONS
+	// Each structure will hold the information needed, and also the database object!!
+
+	struct AlbumData 
+	{
+		std::list<Album>& albums;
+		DatabaseAccess* db;
+	};
+
+	struct PictureData 
+	{
+		Album& album;
+		DatabaseAccess* db;
+	};
+
+	struct TagData 
+	{
+		Picture& picture;
+		DatabaseAccess* db;
+	};
 };

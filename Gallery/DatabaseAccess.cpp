@@ -1,5 +1,18 @@
 #include "DatabaseAccess.h"
+#include "MyException.h"
+#include "DatabaseNotOpenException.h"
+#include "FailedSQLQueryException.h"
+#include "Album.h"
+#include "Picture.h"
 #include <iostream>
+
+// DEFINE CONSTS OF ALL FIELD NAMES
+
+#define USERID "USER_ID"
+#define NAME "NAME"
+#define CREATION "CREATION_DATE"
+#define ID "ID"
+#define LOCATION "LOCATION"
 
 // CONSTRUCTOR
 DatabaseAccess::DatabaseAccess() :
@@ -10,6 +23,7 @@ DatabaseAccess::DatabaseAccess() :
 // DECONSTRUCTOR
 DatabaseAccess::~DatabaseAccess()
 {
+    clear();
 	close();
 }
 
@@ -26,9 +40,8 @@ bool DatabaseAccess::open()
     int res = sqlite3_open(DB_FILE, &_db);
     if (res != SQLITE_OK) 
     {
-        std::cout << "Failed to open database." << std::endl;
-        _db = nullptr;
-        return false;
+        close();
+        throw MyException("Failed to open database.");
     }
 
     // Enabling foreign keys! CRITICAL - WITHOUT IT FOREIGN KEYS WON'T BE RECOGNIZED (as they are disabled in default)!!
@@ -36,18 +49,16 @@ bool DatabaseAccess::open()
     // If it doesn't work - a crucial part of the opening of the database hasn't been successful!
     if (!executeSQL("PRAGMA foreign_keys = ON;"))
     {
-        std::cout << "Failed to enable foreign keys." << std::endl;
         close();    // close - as the database is already opened.
-        return false;
+        throw MyException("Failed to enable foreign keys.");
     }
 
     // Initializing the tables for the database!
     // If it does not initalize successfully - return false.
     if (!initializeDatabase())
     {
-        std::cout << "Failed to initialize database." << std::endl;
         close();    // close - as the database is already opened.
-        return false;
+        throw MyException("Failed to initialize database.");
     }
 
     // If we got here - we successfully opened our database
@@ -70,7 +81,6 @@ void DatabaseAccess::close()
 // as of right now, it is empty - as we did not dynamically allocate any object.
 void DatabaseAccess::clear()
 {
-    
 }
 
 // DELETE AN ALBUM WHEN GIVEN ITS NAME AND OWNER'S ID
@@ -79,8 +89,7 @@ void DatabaseAccess::deleteAlbum(const std::string& albumName, int userId)
     // Check if the database is open.. as we can only access it when it is open!
     if (!_db)
     {
-        std::cout << "The database is not open!" << std::endl;
-        return;
+        throw DatabaseNotOpenException();
     }
 
     // Parsing the SQL query..
@@ -89,7 +98,7 @@ void DatabaseAccess::deleteAlbum(const std::string& albumName, int userId)
 
     if (!executeSQL(sqlQuery))
     {
-        std::cout << "Error occurred while trying to delete an album." << std::endl;
+        throw FailedSQLQueryException("Error occurred while trying to delete an album.", sqlQuery);
     }
 }
 
@@ -99,8 +108,7 @@ void DatabaseAccess::tagUserInPicture(const std::string& albumName, const std::s
     // Check if the database is open.. as we can only access it when it is open!
     if (!_db)
     {
-        std::cout << "The database is not open!" << std::endl;
-        return;
+        throw DatabaseNotOpenException();
     }
 
     // Parsing the SQL query
@@ -114,7 +122,7 @@ void DatabaseAccess::tagUserInPicture(const std::string& albumName, const std::s
 
     if (!executeSQL(sqlQuery))
     {
-        std::cout << "Error occurred while trying to tag a user in a picture." << std::endl;
+        throw FailedSQLQueryException("Error occurred while trying to tag a user in a picture.", sqlQuery);
     }
 }
 
@@ -124,8 +132,7 @@ void DatabaseAccess::untagUserInPicture(const std::string& albumName, const std:
     // Check if the database is open.. as we can only access it when it is open!
     if (!_db)
     {
-        std::cout << "The database is not open!" << std::endl;
-        return;
+        throw DatabaseNotOpenException();
     }
 
     // Parsing the SQL query
@@ -142,7 +149,7 @@ void DatabaseAccess::untagUserInPicture(const std::string& albumName, const std:
     // Execute the query
     if (!executeSQL(sqlQuery))
     {
-        std::cout << "Error occurred while trying to untag user from picture." << std::endl;
+        throw FailedSQLQueryException("Error occurred while trying to untag user from picture.", sqlQuery);
     }
 }
 
@@ -152,8 +159,7 @@ void DatabaseAccess::createUser(const User& user)
     // Check if the database is open.. as we can only access it when it is open!
     if (!_db)
     {
-        std::cout << "The database is not open!" << std::endl;
-        return;
+        throw DatabaseNotOpenException();
     }
 
     // Parsing the SQL query
@@ -164,7 +170,7 @@ void DatabaseAccess::createUser(const User& user)
     // Execute the query
     if (!executeSQL(sqlQuery))
     {
-        std::cout << "Error occurred while trying to create a user." << std::endl;
+        throw FailedSQLQueryException("Error occurred while trying to create a user.", sqlQuery);
     }
 }
 
@@ -174,8 +180,7 @@ void DatabaseAccess::deleteUser(const User& user)
     // Check if the database is open.. as we can only access it when it is open!
     if (!_db)
     {
-        std::cout << "The database is not open!" << std::endl;
-        return;
+        throw DatabaseNotOpenException();
     }
 
     // Parsing the SQL query
@@ -188,8 +193,32 @@ void DatabaseAccess::deleteUser(const User& user)
     // Execute the query
     if (!executeSQL(sqlQuery))
     {
-        std::cout << "Error occurred while trying to delete a user." << std::endl;
+        throw FailedSQLQueryException("Error occurred while trying to delete a user.", sqlQuery);
     }
+}
+
+const std::list<Album> DatabaseAccess::getAlbums()
+{
+    if (!_db) 
+    {
+        throw DatabaseNotOpenException();
+    }
+
+    // Building the list of albums we will get
+    std::list<Album> albumList;
+
+    AlbumData albumData{ albumList, this };
+
+    std::string sqlQuery = "SELECT * FROM ALBUMS;";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &albumsCallBack, &albumData, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to get the albums.", sqlQuery);
+    }
+
+    return albumList;
 }
 
 bool DatabaseAccess::initializeDatabase()
@@ -255,4 +284,127 @@ bool DatabaseAccess::executeSQL(const std::string& query)
     }
 
     return true;
+}
+
+int DatabaseAccess::albumsCallBack(void* data, int argc, char** argv, char** colNames)
+{
+    // Cast the void* data back to our list<Album>*
+    auto* albumData = static_cast<AlbumData*>(data);
+
+    // Temporary variables to hold album data
+    int userId = 0;
+    std::string name;
+    std::string creationDate;
+    // Temporary variable of the ID of the current album
+    int albumId = 0;
+
+    // Process each column in the result row
+    for (int i = 0; i < argc; i++)
+    {
+        if (colNames[i] == USERID)
+        {
+            userId = std::stoi(argv[i]);
+        }
+        else if (colNames[i] == NAME)
+        {
+            name = argv[i];
+        }
+        else if (colNames[i] == CREATION)
+        {
+            creationDate = argv[i];
+        }
+        else if (colNames[i] == ID)
+        {
+            albumId = std::stoi(argv[i]);
+        }
+    }
+
+    albumData->albums.emplace_back(userId, name, creationDate);                // Put the new album in the back of the album list
+    Album& currentAlbum = albumData->albums.back();                            // Get the last album in the list - the one we just created
+
+    // Now - we can add to each album its pictures (including each tag in each picture)
+
+    std::string pictureQuery = "SELECT ID, NAME, CREATION_DATE, LOCATION FROM PICTURES WHERE ALBUM_ID = " + std::to_string(albumId) + ';';
+
+    PictureData pictureData = { currentAlbum, albumData->db };
+
+    int res = sqlite3_exec(albumData->db->_db, pictureQuery.c_str(), &picturesCallback, &pictureData, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        return SQLITE_ERROR;
+    }
+
+    return SQLITE_OK;   // We can continue
+}
+
+int DatabaseAccess::picturesCallback(void* data, int argc, char** argv, char** colNames)
+{
+    auto* pictureData = static_cast<PictureData*>(data);
+
+    // Temporary variables to hold the picture's data
+    int pictureId = 0;
+    std::string name;
+    std::string creationDate;  
+    std::string location;
+
+    // Process each column in the result row
+    for (int i = 0; i < argc; i++)
+    {
+        if (colNames[i] == ID)
+        {
+            pictureId = std::stoi(argv[i]);
+        }
+        else if (colNames[i] == NAME)
+        {
+            name = argv[i];
+        }
+        else if (colNames[i] == CREATION)
+        {
+            creationDate = argv[i];
+        }
+        else if (colNames[i] == LOCATION)
+        {
+            location = argv[i];
+        }
+    }
+
+    pictureData->album.addPicture(Picture(pictureId, name, location, creationDate));        // Add each picture to the album that contains it!
+    Picture& currentPicture = pictureData->album.getPictures().back();                             // Getting the picture we just created
+
+    // Now - we can add to each picture its tags
+    std::string tagQuery = "SELECT USER_ID FROM TAGS WHERE PICTURE_ID = " + std::to_string(pictureId) + ';';
+
+    TagData tagData = { currentPicture, pictureData->db};
+
+    int res = sqlite3_exec(pictureData->db->_db, tagQuery.c_str(), &tagsCallBack, &tagData, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        return SQLITE_ERROR;
+    }
+
+    return SQLITE_OK;   // We can continue
+}
+
+int DatabaseAccess::tagsCallBack(void* data, int argc, char** argv, char** colNames)
+{
+    auto* tagData = static_cast<TagData*>(data);
+
+    // Temporary variables to hold the tags's data
+    int userId = 0;
+
+    // Process each column in the result row
+    for (int i = 0; i < argc; i++)
+    {
+        if (colNames[i] == USERID)
+        {
+            userId = std::stoi(argv[i]);
+        }
+    }
+
+    // Add tag to picture
+    tagData->picture.tagUser(userId);
+
+    return SQLITE_OK;   // We can continue
 }

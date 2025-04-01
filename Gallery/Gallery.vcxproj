@@ -89,6 +89,8 @@
     <ClInclude Include="AlbumManager.h" />
     <ClInclude Include="AlbumNotOpenException.h" />
     <ClInclude Include="DatabaseAccess.h" />
+    <ClInclude Include="DatabaseNotOpenException.h" />
+    <ClInclude Include="FailedSQLQueryException.h" />
     <ClInclude Include="IDataAccess.h" />
     <ClInclude Include="ItemNotFoundException.h" />
     <ClInclude Include="MemoryAccess.h" />
