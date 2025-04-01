@@ -2,6 +2,7 @@
 #include "MyException.h"
 #include "DatabaseNotOpenException.h"
 #include "FailedSQLQueryException.h"
+#include "ItemNotFoundException.h"
 #include "Album.h"
 #include "Picture.h"
 #include <iostream>
@@ -16,7 +17,7 @@
 
 // CONSTRUCTOR
 DatabaseAccess::DatabaseAccess() :
-	_db(nullptr)
+	_db(nullptr), _openAlbum(nullptr)
 {
 }
 
@@ -81,15 +82,26 @@ void DatabaseAccess::close()
 // as of right now, it is empty - as we did not dynamically allocate any object.
 void DatabaseAccess::clear()
 {
+    // Check if there is an open album.. if there is - free it, and nullify it.
+    if (!_openAlbum)
+    {
+        free(_openAlbum);
+        _openAlbum = nullptr;
+    }
 }
 
 // DELETE AN ALBUM WHEN GIVEN ITS NAME AND OWNER'S ID
 void DatabaseAccess::deleteAlbum(const std::string& albumName, int userId)
 {
     // Check if the database is open.. as we can only access it when it is open!
+    // We will need to also check that the album even exists in the first place!
     if (!_db)
     {
         throw DatabaseNotOpenException();
+    }
+    else if (!doesAlbumExists(albumName, userId))
+    {
+        throw ItemNotFoundException("Album: " + albumName, userId);
     }
 
     // Parsing the SQL query..
@@ -197,8 +209,10 @@ void DatabaseAccess::deleteUser(const User& user)
     }
 }
 
+// GET ALL ALBUMS IN THE DATABASE
 const std::list<Album> DatabaseAccess::getAlbums()
 {
+    // Check if the database is open.. as we can only access it when it is open!
     if (!_db) 
     {
         throw DatabaseNotOpenException();
@@ -219,6 +233,132 @@ const std::list<Album> DatabaseAccess::getAlbums()
     }
 
     return albumList;
+}
+
+// GET ALL ALBUMS OF A CERTAIN USER
+const std::list<Album> DatabaseAccess::getAlbumsOfUser(const User& user)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+
+    // Building the list of albums we will get
+    std::list<Album> albumList;
+
+    AlbumData albumData{ albumList, this };
+
+    std::string sqlQuery = "SELECT * FROM ALBUMS WHERE USER_ID = " + std::to_string(user.getId()) + ';';
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &albumsCallBack, &albumData, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to get the albums of the user " + user.getName() + ".", sqlQuery);
+    }
+
+    return albumList;
+}
+
+// CREATE AN ALBUM
+void DatabaseAccess::createAlbum(const Album& album)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // We will also make sure that the album does not exist in the database!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (doesAlbumExists(album.getName(), album.getOwnerId()))
+    {
+        throw MyException("The album " + album.getName() + " with the owner id of " + std::to_string(album.getOwnerId()) + "already exists.");
+    }
+
+    std::string createAlbumQuery = "INSERT INTO ALBUMS (NAME, CREATION_DATE, USER_ID) VALUES(\"" 
+                                   + album.getName() + "\", \"" + album.getCreationDate() + "\", " + std::to_string(album.getOwnerId()) + ");";
+
+    if (!executeSQL(createAlbumQuery))
+    {
+        throw FailedSQLQueryException("Error occurred while trying to create an album.", createAlbumQuery);
+    }
+}
+
+bool DatabaseAccess::doesAlbumExists(const std::string& albumName, int userId)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+
+    // Start by using the callback function and finding if there is an album that contains the following:
+    // the same name as we want, and the same owner id.
+
+    std::list<Album> albums;
+    AlbumData albumData{ albums, this };
+
+    std::string sqlQuery = "SELECT * FROM ALBUMS WHERE NAME = \"" + albumName + "\" AND USER_ID = " + std::to_string(userId) + " LIMIT 1;";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &albumsCallBack, &albumData, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to find if an album exists.", sqlQuery);
+    }
+
+    // If albums contains an album - it does exist! If its empty - it does not exist.
+    return !albums.empty();
+}
+
+Album DatabaseAccess::openAlbum(const std::string& albumName)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // Check that no album is already open
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (_openAlbum != nullptr)
+    {
+        throw MyException("Another album is already open. Close it first.");
+    }
+
+    // We will find if the album exists, if it doesn't we will throw an exception
+    // If it does exist - we will open it.
+    std::list<Album> albums;
+    AlbumData albumData{ albums, this };
+
+    std::string openAlbumQuery = "SELECT * FROM ALBUMS WHERE NAME = \"" + albumName + "\" LIMIT 1 ;";
+
+    int res = sqlite3_exec(_db, openAlbumQuery.c_str(), &albumsCallBack, &albumData, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to find if an album exists.", openAlbumQuery);
+    }
+
+    // If it did not find any album with the name - it does not exist
+    if (albums.empty()) 
+    {
+        throw MyException("Did not find any album with the name of " + albumName);
+    }
+
+    // Store the opened album
+    _openAlbum = new Album(albums.front());
+
+    // Return the open album
+    return *_openAlbum;
+}
+
+void DatabaseAccess::closeAlbum(Album& pAlbum)
+{
+    if (!_openAlbum)
+    {
+        throw MyException("There is no album open currently.");
+    }
+    
+    clear();
 }
 
 bool DatabaseAccess::initializeDatabase()

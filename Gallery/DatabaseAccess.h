@@ -38,6 +38,12 @@ public:
 	// METHODS - LEVEL 3 OF V1.0.2
 
 	virtual const std::list<Album> getAlbums();
+	virtual const std::list<Album> getAlbumsOfUser(const User& user);
+	virtual void createAlbum(const Album& album);
+	virtual bool doesAlbumExists(const std::string& albumName, int userId);
+	virtual Album openAlbum(const std::string& albumName);
+	virtual void closeAlbum(Album& pAlbum);
+	virtual void printAlbums();
 
 
 private:
@@ -47,6 +53,8 @@ private:
 	// The DB itself
 	sqlite3* _db;
 
+	// The album that is currently open!!
+	Album* _openAlbum;
 
 
 	// PRIVATE METHODS FOR MAKING THE REST EFFICIENT
