@@ -15,6 +15,10 @@
 #define ID "ID"
 #define LOCATION "LOCATION"
 
+// DEFINES FOR PREVENTING MAGIC NUMBERS
+
+#define MIN_FIELD_WIDTH 5       // used in setw when printing
+
 // CONSTRUCTOR
 DatabaseAccess::DatabaseAccess() :
 	_db(nullptr), _openAlbum(nullptr)
@@ -83,7 +87,7 @@ void DatabaseAccess::close()
 void DatabaseAccess::clear()
 {
     // Check if there is an open album.. if there is - free it, and nullify it.
-    if (!_openAlbum)
+    if (_openAlbum)
     {
         free(_openAlbum);
         _openAlbum = nullptr;
@@ -111,6 +115,13 @@ void DatabaseAccess::deleteAlbum(const std::string& albumName, int userId)
     if (!executeSQL(sqlQuery))
     {
         throw FailedSQLQueryException("Error occurred while trying to delete an album.", sqlQuery);
+    }
+
+    // NOW - We need to make sure that the album we just deleted isn't the album we opened, if it is - we will close it
+    // BUT - first we will check that there is an album that is open in the first place!
+    if (_openAlbum && _openAlbum->getName() == albumName && _openAlbum->getOwnerId() == userId)
+    {
+        clear();
     }
 }
 
@@ -207,6 +218,15 @@ void DatabaseAccess::deleteUser(const User& user)
     {
         throw FailedSQLQueryException("Error occurred while trying to delete a user.", sqlQuery);
     }
+
+    // After we deleted a user - we will check if it also deleted the album we currently have that is open!
+    // First we will check if there is an album that is open in the first place..
+    // if the album was deleted - close it.
+
+    if (_openAlbum && !doesAlbumExists(_openAlbum->getName(), _openAlbum->getOwnerId()))
+    {
+        clear();
+    }
 }
 
 // GET ALL ALBUMS IN THE DATABASE
@@ -284,6 +304,7 @@ void DatabaseAccess::createAlbum(const Album& album)
     }
 }
 
+// CHECK IF AN ALBUM EXISTS BY NAME AND OWNER ID
 bool DatabaseAccess::doesAlbumExists(const std::string& albumName, int userId)
 {
     // Check if the database is open.. as we can only access it when it is open!
@@ -311,6 +332,7 @@ bool DatabaseAccess::doesAlbumExists(const std::string& albumName, int userId)
     return !albums.empty();
 }
 
+// OPEN AN ALBUM
 Album DatabaseAccess::openAlbum(const std::string& albumName)
 {
     // Check if the database is open.. as we can only access it when it is open!
@@ -351,14 +373,47 @@ Album DatabaseAccess::openAlbum(const std::string& albumName)
     return *_openAlbum;
 }
 
+// CLOSE THE ALBUM
 void DatabaseAccess::closeAlbum(Album& pAlbum)
 {
     if (!_openAlbum)
     {
         throw MyException("There is no album open currently.");
     }
-    
+    else if (*_openAlbum == pAlbum)
+    {
+        throw MyException("Attempting to close the wrong album.");
+    }
     clear();
+}
+
+// PRINT ALL ALBUMS
+void DatabaseAccess::printAlbums()
+{
+    try
+    {
+        // Get all the albums in the db
+        const std::list<Album> albums = getAlbums();
+
+        // Check if there are albums
+        if (albums.empty())
+        {
+            throw MyException("There are no existing albums.");
+        }
+
+        std::cout << "Album list:" << std::endl;
+        std::cout << "-----------" << std::endl;
+
+        // Print all info about albums
+        for (const Album& album : albums) 
+        {
+            std::cout << std::setw(MIN_FIELD_WIDTH) << "* " << album;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cout << e.what() << std::endl;
+    }
 }
 
 bool DatabaseAccess::initializeDatabase()
