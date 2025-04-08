@@ -606,6 +606,112 @@ bool DatabaseAccess::doesUserExists(int userId)
     return !usersList.empty();
 }
 
+int DatabaseAccess::countAlbumsOwnedOfUser(const User& user)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // We will also need to check that the user even exists in the database..
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(user.getId()))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(user.getId()));
+    }
+
+    // The list of albums that will contain all the albums of the user
+    std::list<Album> albumList;
+
+    AlbumData albumData{ albumList, this };
+
+    std::string sqlQuery = "SELECT * FROM ALBUMS WHERE USER_ID = " + std::to_string(user.getId()) + ";";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &albumsCallBack, &albumData, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while find out the amount of albums a user has.", sqlQuery);
+    }
+
+    return albumList.size();
+}
+
+int DatabaseAccess::countAlbumsTaggedOfUser(const User& user)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // We will also need to check that the user even exists in the database..
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(user.getId()))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(user.getId()));
+    }
+
+    // The list of albums that will contain all the albums of the user
+    std::list<Album> albumList;
+
+    AlbumData albumData{ albumList, this };
+
+    std::string sqlQuery = "SELECT DISTINCT ALBUMS.ID FROM ALBUMS INNER JOIN PICTURES ON ALBUMS.ID = PICTURES.ALBUM_ID "
+                           "INNER JOIN TAGS ON PICTURES.ID = TAGS.PICTURE_ID WHERE TAGS.USER_ID = " + std::to_string(user.getId()) + ";";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &albumsCallBack, &albumData, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while finding out the amount of albums a user was tagged in.", sqlQuery);
+    }
+
+    return albumList.size();
+}
+
+int DatabaseAccess::countTagsOfUser(const User& user)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // We will also need to check that the user even exists in the database..
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(user.getId()))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(user.getId()));
+    }
+
+    int countOfTags = 0;
+
+    std::string sqlQuery = "SELECT * FROM TAGS WHERE USER_ID = " + std::to_string(user.getId()) + ";";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &tagsCountCallBack, &countOfTags, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while finding out the amount of times a user has been tagged.", sqlQuery);
+    }
+
+    return countOfTags;
+}
+
+float DatabaseAccess::averageTagsPerAlbumOfUser(const User& user)
+{
+    // Get the count of albums tagged by the user
+    int albumsTaggedCount = countAlbumsTaggedOfUser(user);
+
+    // In case the user has been tagged 0 times - return 0.
+    if (albumsTaggedCount == 0)
+    {
+        return 0.0f;
+    }
+
+    // Get the total count of tags for the user
+    int totalTags = countTagsOfUser(user);
+
+    // Calculate and return the average of tags in albums the user has been tagged in.
+    return static_cast<float>(totalTags) / albumsTaggedCount;
+}
+
 bool DatabaseAccess::initializeDatabase()
 {
     // Initialization of the 4 tables
@@ -890,6 +996,17 @@ int DatabaseAccess::usersCallBack(void* data, int argc, char** argv, char** colN
 
     // Add the user we found onto the list of users
     usersList->emplace_back(userId, userName);
+
+    return SQLITE_OK;
+}
+
+int DatabaseAccess::tagsCountCallBack(void* data, int argc, char** argv, char** colNames)
+{
+    // Cast the count so far
+    auto countTags = static_cast<int*>(data);
+
+    // Increment the count of tags
+    (*countTags)++;
 
     return SQLITE_OK;
 }
