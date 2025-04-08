@@ -48,6 +48,10 @@ public:
 	virtual void addPictureToAlbumByName(const std::string& albumName, const Picture& picture);
 	virtual void removePictureFromAlbumByName(const std::string& albumName, const std::string& pictureName);
 
+	virtual void printUsers();
+	virtual User getUser(int userId);
+	virtual bool doesUserExists(int userId);
+
 
 private:
 
@@ -82,6 +86,8 @@ private:
 	static int tagsCallBack(void* data, int argc, char** argv, char** colNames);
 	// Callback function of getting all the available pictures in the database
 	static int picturesAvailableCallBack(void* data, int argc, char** argv, char** colNames);
+	// Callback function of getting all the users onto a list
+	static int usersCallBack(void* data, int argc, char** argv, char** colNames);
 
 
 

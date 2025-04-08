@@ -101,7 +101,7 @@ void DatabaseAccess::clear()
 void DatabaseAccess::deleteAlbum(const std::string& albumName, int userId)
 {
     // Check if the database is open.. as we can only access it when it is open!
-    // We will need to also check that the album even exists in the first place!
+    // We will need to also check that the album even exists in the first place, and that the userId leads to an existing user!
     if (!_db)
     {
         throw DatabaseNotOpenException();
@@ -109,6 +109,10 @@ void DatabaseAccess::deleteAlbum(const std::string& albumName, int userId)
     else if (!doesAlbumExists(albumName, userId))
     {
         throw ItemNotFoundException("Album: " + albumName, userId);
+    }
+    else if (!doesUserExists(userId))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(userId));
     }
 
     // Parsing the SQL query..
@@ -132,9 +136,14 @@ void DatabaseAccess::deleteAlbum(const std::string& albumName, int userId)
 void DatabaseAccess::tagUserInPicture(const std::string& albumName, const std::string& pictureName, int userId)
 {
     // Check if the database is open.. as we can only access it when it is open!
+    // And also check that the userId leads to an existing user.
     if (!_db)
     {
         throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(userId))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(userId));
     }
 
     // Parsing the SQL query
@@ -156,9 +165,14 @@ void DatabaseAccess::tagUserInPicture(const std::string& albumName, const std::s
 void DatabaseAccess::untagUserInPicture(const std::string& albumName, const std::string& pictureName, int userId)
 {
     // Check if the database is open.. as we can only access it when it is open!
+    // And also that the userId leads to an existing user.
     if (!_db)
     {
         throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(userId))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(userId));
     }
 
     // Parsing the SQL query
@@ -183,9 +197,14 @@ void DatabaseAccess::untagUserInPicture(const std::string& albumName, const std:
 void DatabaseAccess::createUser(const User& user)
 {
     // Check if the database is open.. as we can only access it when it is open!
+    // And also we will need to check that no user already exists with the ID we want to use
     if (!_db)
     {
         throw DatabaseNotOpenException();
+    }
+    else if (doesUserExists(user.getId()))
+    {
+        throw MyException("User with the id " + std::to_string(user.getId()) + " already exists!");
     }
 
     // Parsing the SQL query
@@ -207,6 +226,10 @@ void DatabaseAccess::deleteUser(const User& user)
     if (!_db)
     {
         throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(user.getId()))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(user.getId()));
     }
 
     // Parsing the SQL query
@@ -262,9 +285,14 @@ const std::list<Album> DatabaseAccess::getAlbums()
 const std::list<Album> DatabaseAccess::getAlbumsOfUser(const User& user)
 {
     // Check if the database is open.. as we can only access it when it is open!
+    // We will also need to check that the user exists in the database
     if (!_db)
     {
         throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(user.getId()))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(user.getId()));
     }
 
     // Building the list of albums we will get
@@ -311,9 +339,14 @@ void DatabaseAccess::createAlbum(const Album& album)
 bool DatabaseAccess::doesAlbumExists(const std::string& albumName, int userId)
 {
     // Check if the database is open.. as we can only access it when it is open!
+    // We will also need to check that the userId leads to an existing user
     if (!_db)
     {
         throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(userId))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(userId));
     }
 
     // Start by using the callback function and finding if there is an album that contains the following:
@@ -484,6 +517,95 @@ void DatabaseAccess::removePictureFromAlbumByName(const std::string& albumName, 
     }
 }
 
+void DatabaseAccess::printUsers()
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+
+    // Building the list of users we will get
+    std::list<User> usersList;
+
+    std::string sqlQuery = "SELECT * FROM USERS;";
+
+    // We now got the users onto a list!
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &usersCallBack, &usersList, nullptr);
+
+    // If an error occurred..
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to get the users.", sqlQuery);
+    }
+
+    // Printing the users
+
+    std::cout << "Users list:" << std::endl;
+    std::cout << "-----------" << std::endl;
+
+    for (const auto& user : usersList)
+    {
+        std::cout << user << std::endl;
+    }
+}
+
+User DatabaseAccess::getUser(int userId)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // We will also need to check that the user exists in the first place!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(userId))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(userId));
+    }
+
+    // The list of users which will be used in order to fetch the user with the id.
+    // fits the data the callback function expects
+    std::list<User> usersList;
+
+    std::string fetchUserQuery = "SELECT * FROM USERS WHERE ID = " + std::to_string(userId) + " LIMIT 1;";
+
+    // We now got the users onto a list!
+    int res = sqlite3_exec(_db, fetchUserQuery.c_str(), &usersCallBack, &usersList, nullptr);
+
+    // If an error occurred..
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to get the users.", fetchUserQuery);
+    }
+
+    // Return the user that was input onto the list of users
+    return usersList.front();
+}
+
+bool DatabaseAccess::doesUserExists(int userId)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+
+    // Building the list of users we will use to figure out if a user with the id given exists.
+    std::list<User> usersList;
+
+    std::string sqlQuery = "SELECT * FROM USERS WHERE ID = " + std::to_string(userId) + " LIMIT 1;";
+
+    // We now got the users onto a list!
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &usersCallBack, &usersList, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying figure out if a user exists.", sqlQuery);
+    }
+
+    return !usersList.empty();
+}
+
 bool DatabaseAccess::initializeDatabase()
 {
     // Initialization of the 4 tables
@@ -582,13 +704,13 @@ bool DatabaseAccess::doesPictureExist(const Picture& picture)
 
 int DatabaseAccess::albumsCallBack(void* data, int argc, char** argv, char** colNames)
 {
-    // Cast the void* data back to our list<Album>*
+    // Cast the void* data back to our AlbumData
     auto* albumData = static_cast<AlbumData*>(data);
 
     // Temporary variables to hold album data
     int userId = 0;
-    std::string name;
-    std::string creationDate;
+    std::string name = "";
+    std::string creationDate = "";
     // Temporary variable of the ID of the current album
     int albumId = 0;
 
@@ -634,13 +756,14 @@ int DatabaseAccess::albumsCallBack(void* data, int argc, char** argv, char** col
 
 int DatabaseAccess::picturesCallback(void* data, int argc, char** argv, char** colNames)
 {
+    // Cast the void* back to our PictureData
     auto* pictureData = static_cast<PictureData*>(data);
 
     // Temporary variables to hold the picture's data
     int pictureId = 0;
-    std::string name;
-    std::string creationDate;  
-    std::string location;
+    std::string name = "";
+    std::string creationDate = "";
+    std::string location = "";
 
     // Process each column in the result row
     for (int i = 0; i < argc; i++)
@@ -683,6 +806,7 @@ int DatabaseAccess::picturesCallback(void* data, int argc, char** argv, char** c
 
 int DatabaseAccess::tagsCallBack(void* data, int argc, char** argv, char** colNames)
 {
+    // Casting the void* back to our TagData
     auto* tagData = static_cast<TagData*>(data);
 
     // Temporary variables to hold the tags's data
@@ -705,13 +829,14 @@ int DatabaseAccess::tagsCallBack(void* data, int argc, char** argv, char** colNa
 
 int DatabaseAccess::picturesAvailableCallBack(void* data, int argc, char** argv, char** colNames)
 {
+    // Casting the void* back to our list of pictures
     auto* pictureList = static_cast<std::list<Picture>*>(data);
 
     // Temporary variables to hold the picture's data
     int pictureId = 0;
-    std::string name;
-    std::string creationDate;
-    std::string location;
+    std::string name = "";
+    std::string creationDate = "";
+    std::string location = "";
 
     // Process each column in the result row
     for (int i = 0; i < argc; i++)
@@ -736,6 +861,35 @@ int DatabaseAccess::picturesAvailableCallBack(void* data, int argc, char** argv,
 
     // Add the picture we found onto the list of pictures
     pictureList->emplace_back(pictureId, name, location, creationDate);
+
+    return SQLITE_OK;
+}
+
+int DatabaseAccess::usersCallBack(void* data, int argc, char** argv, char** colNames)
+{
+    // Casting the void* back to our list of users
+    auto* usersList = static_cast<std::list<User>*>(data);
+
+    // Temporary variables that will hold the user's data
+    int userId = 0;
+    std::string userName;
+
+
+    // Process each column in the result row
+    for (int i = 0; i < argc; i++)
+    {
+        if (colNames[i] == ID)
+        {
+            userId = std::stoi(argv[i]);
+        }
+        else if (colNames[i] == NAME)
+        {
+            userName = argv[i];
+        }
+    }
+
+    // Add the user we found onto the list of users
+    usersList->emplace_back(userId, userName);
 
     return SQLITE_OK;
 }
