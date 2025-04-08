@@ -79,6 +79,9 @@ void DatabaseAccess::close()
 	{
 		sqlite3_close(_db);
 		_db = nullptr;
+
+        // and if there is an album that is open - close it!
+        clear();
 	}
 }
 
@@ -86,10 +89,10 @@ void DatabaseAccess::close()
 // as of right now, it is empty - as we did not dynamically allocate any object.
 void DatabaseAccess::clear()
 {
-    // Check if there is an open album.. if there is - free it, and nullify it.
+    // Check if there is an open album.. if there is - delete it, and nullify it.
     if (_openAlbum)
     {
-        free(_openAlbum);
+        delete _openAlbum;
         _openAlbum = nullptr;
     }
 }
@@ -292,7 +295,7 @@ void DatabaseAccess::createAlbum(const Album& album)
     }
     else if (doesAlbumExists(album.getName(), album.getOwnerId()))
     {
-        throw MyException("The album " + album.getName() + " with the owner id of " + std::to_string(album.getOwnerId()) + "already exists.");
+        throw MyException("The album " + album.getName() + " with the owner id of " + std::to_string(album.getOwnerId()) + " already exists.");
     }
 
     std::string createAlbumQuery = "INSERT INTO ALBUMS (NAME, CREATION_DATE, USER_ID) VALUES(\"" 
@@ -380,7 +383,7 @@ void DatabaseAccess::closeAlbum(Album& pAlbum)
     {
         throw MyException("There is no album open currently.");
     }
-    else if (*_openAlbum == pAlbum)
+    else if (!(*_openAlbum == pAlbum))
     {
         throw MyException("Attempting to close the wrong album.");
     }
@@ -413,6 +416,71 @@ void DatabaseAccess::printAlbums()
     catch (const std::exception& e)
     {
         std::cout << e.what() << std::endl;
+    }
+}
+
+void DatabaseAccess::addPictureToAlbumByName(const std::string& albumName, const Picture& picture)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // Also need to check that an album is open in the first place,
+    // and that the album we want to add a picture to is the same album that is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (!_openAlbum)
+    {
+        throw MyException("No album is open. Open one first.");
+    }
+    else if (!isAlbumOpen(albumName))
+    {
+        throw MyException("Can't add a picture to an album that you did not open!");
+    }
+    else if (doesPictureExist(picture))
+    {
+        throw MyException("The given picture already belongs to an album!");
+    }
+
+    // Inserting onto the PICTURES TABLE the picture given including the ID -
+    // Since we already checked that there is no picture with the given ID.
+
+    std::string insertPictureQuery = "INSERT INTO PICTURES (ID, NAME, LOCATION, CREATION_DATE, ALBUM_ID) "
+                                     "VALUES (" + std::to_string(picture.getId()) + ", \"" + picture.getName() + "\", \"" 
+                                     + picture.getPath() + "\", \"" + picture.getCreationDate() + "\", (SELECT ID FROM ALBUMS WHERE NAME = \"" +
+                                     albumName + "\" LIMIT 1));";
+
+    if (!executeSQL(insertPictureQuery))
+    {
+        throw FailedSQLQueryException("Error occurred while trying to add the picture to the album.", insertPictureQuery);
+    }
+}
+
+void DatabaseAccess::removePictureFromAlbumByName(const std::string& albumName, const std::string& pictureName)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // Also need to check that an album is open in the first place,
+    // and that the album we want to remove a picture from is the same album that is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (!_openAlbum)
+    {
+        throw MyException("No album is open. Open one first.");
+    }
+    else if (!isAlbumOpen(albumName))
+    {
+        throw MyException("Can't remove a picture from an album that you did not open!");
+    }
+
+    // Deleting the picture from the database...
+
+    std::string deletePictureQuery = "DELETE FROM PICTURES WHERE NAME = \"" + pictureName + "\" "
+                                     "AND ALBUM_ID = (SELECT ID FROM ALBUMS WHERE NAME = \"" + albumName + "\" LIMIT 1);";
+
+    if (!executeSQL(deletePictureQuery))
+    {
+        throw FailedSQLQueryException("Error occurred while trying to remove a picture from the album.", deletePictureQuery);
     }
 }
 
@@ -479,6 +547,37 @@ bool DatabaseAccess::executeSQL(const std::string& query)
     }
 
     return true;
+}
+
+bool DatabaseAccess::isAlbumOpen(const std::string& albumName)
+{
+    return _openAlbum && albumName == _openAlbum->getName();
+}
+
+bool DatabaseAccess::doesPictureExist(const Picture& picture)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+
+    // Start by using the callback function and finding if there is an album that contains the following:
+    // the same name as we want, and the same owner id.
+
+    std::list<Picture> pictures;
+
+    std::string sqlQuery = "SELECT * FROM PICTURES WHERE ID = " + std::to_string(picture.getId()) + " LIMIT 1;";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &albumsCallBack, &pictures, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to find if a picture exists.", sqlQuery);
+    }
+
+    // If albums contains an album - it does exist! If its empty - it does not exist.
+    return !pictures.empty();
 }
 
 int DatabaseAccess::albumsCallBack(void* data, int argc, char** argv, char** colNames)
@@ -602,4 +701,41 @@ int DatabaseAccess::tagsCallBack(void* data, int argc, char** argv, char** colNa
     tagData->picture.tagUser(userId);
 
     return SQLITE_OK;   // We can continue
+}
+
+int DatabaseAccess::picturesAvailableCallBack(void* data, int argc, char** argv, char** colNames)
+{
+    auto* pictureList = static_cast<std::list<Picture>*>(data);
+
+    // Temporary variables to hold the picture's data
+    int pictureId = 0;
+    std::string name;
+    std::string creationDate;
+    std::string location;
+
+    // Process each column in the result row
+    for (int i = 0; i < argc; i++)
+    {
+        if (colNames[i] == ID)
+        {
+            pictureId = std::stoi(argv[i]);
+        }
+        else if (colNames[i] == NAME)
+        {
+            name = argv[i];
+        }
+        else if (colNames[i] == CREATION)
+        {
+            creationDate = argv[i];
+        }
+        else if (colNames[i] == LOCATION)
+        {
+            location = argv[i];
+        }
+    }
+
+    // Add the picture we found onto the list of pictures
+    pictureList->emplace_back(pictureId, name, location, creationDate);
+
+    return SQLITE_OK;
 }

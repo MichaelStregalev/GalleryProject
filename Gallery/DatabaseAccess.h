@@ -45,6 +45,9 @@ public:
 	virtual void closeAlbum(Album& pAlbum);
 	virtual void printAlbums();
 
+	virtual void addPictureToAlbumByName(const std::string& albumName, const Picture& picture);
+	virtual void removePictureFromAlbumByName(const std::string& albumName, const std::string& pictureName);
+
 
 private:
 
@@ -65,15 +68,20 @@ private:
 	// HELPER METHOD - EXECUTE SQL QUERIES, RETURN TRUE OR FALSE IF IT DID OR DID NOT WORK SUCCESSFULLY
 	bool executeSQL(const std::string& query);
 
+	// PRIVATE HELPER METHODS
 
+	bool isAlbumOpen(const std::string& albumName);		// Returns true if the name of the album given is the same as the album that is open!
+	bool doesPictureExist(const Picture& picture);		// Returns ture if the picture given exists in the database
 	// CALLBACK FUNCTIONS
 
 	// Callback function of getting albums onto a list
-	static int albumsCallBack(void* data, int argc, char** argv, char** azColName);
+	static int albumsCallBack(void* data, int argc, char** argv, char** colNames);
 	// Callback function of getting all the pictures inside an album
 	static int picturesCallback(void* data, int argc, char** argv, char** colNames);
 	// Callback function of tagging a user in a picture given to it
-	static int tagsCallBack(void* data, int argc, char** argv, char** azColName);
+	static int tagsCallBack(void* data, int argc, char** argv, char** colNames);
+	// Callback function of getting all the available pictures in the database
+	static int picturesAvailableCallBack(void* data, int argc, char** argv, char** colNames);
 
 
 
