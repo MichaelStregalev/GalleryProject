@@ -3,13 +3,40 @@
 #include "Constants.h"
 #include "MyException.h"
 #include "AlbumNotOpenException.h"
+#include "DatabaseAccess.h"
 
+#define DEFAULT_STARTING_USER_ID 200
+#define DEFAULT_STARTING_PICTURE_ID 100
 
 AlbumManager::AlbumManager(IDataAccess& dataAccess) :
     m_dataAccess(dataAccess), m_nextPictureId(100), m_nextUserId(200)
 {
 	// Left empty
 	m_dataAccess.open();
+
+	// Connecting the AlbumManager and the Database by syncing the lastest ID of the user and picture
+	try 
+	{
+		DatabaseAccess* dbAccess = dynamic_cast<DatabaseAccess*>(&m_dataAccess);
+		if (dbAccess)
+		{
+			m_nextUserId = dbAccess->lastUserIdInDatabase();
+			m_nextPictureId = dbAccess->lastPictureIdInDatabase();
+
+			if (m_nextUserId == 0)
+			{
+				m_nextUserId = DEFAULT_STARTING_USER_ID;
+			}
+			if (m_nextPictureId == 0)
+			{
+				m_nextPictureId = DEFAULT_STARTING_PICTURE_ID;
+			}
+		}
+	}
+	catch (...)
+	{
+		// nothing. If theres an error - then the dynamic_cast didn't work and it will stay as is.
+	}
 }
 
 void AlbumManager::executeCommand(CommandType command) {

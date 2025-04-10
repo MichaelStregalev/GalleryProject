@@ -9,14 +9,14 @@
 #include <map>
 #include <iostream>
 
-// DEFINE CONSTS OF ALL FIELD NAMES
+// CONSTS OF ALL FIELD NAMES - std::strings in order to fit the operator ==
 
-#define USERID "USER_ID"
-#define NAME "NAME"
-#define CREATION "CREATION_DATE"
-#define ID "ID"
-#define LOCATION "LOCATION"
-#define TAGGED_USERS "TAGGED_USERS"
+const std::string USERID = "USER_ID";
+const std::string NAME = "NAME";
+const std::string CREATION = "CREATION_DATE";
+const std::string ID = "ID";
+const std::string LOCATION = "LOCATION";
+const std::string TAGGED_USERS = "TAGGED_USERS";
 
 // DEFINES FOR PREVENTING MAGIC NUMBERS
 
@@ -211,9 +211,7 @@ void DatabaseAccess::createUser(const User& user)
     }
 
     // Parsing the SQL query
-    std::string sqlQuery = "INSERT INTO USERS (ID, NAME) VALUES (" +
-                            std::to_string(user.getId()) + ", \"" +
-                            user.getName() + "\");";
+    std::string sqlQuery = "INSERT INTO USERS (NAME) VALUES (\"" + user.getName() + "\");";
 
     // Execute the query
     if (!executeSQL(sqlQuery))
@@ -477,10 +475,7 @@ void DatabaseAccess::addPictureToAlbumByName(const std::string& albumName, const
         throw MyException("The given picture already belongs to an album!");
     }
 
-    // Inserting onto the PICTURES TABLE the picture given including the ID -
-    // Since we already checked that there is no picture with the given ID.
-
-    std::string insertPictureQuery = "INSERT INTO PICTURES (ID, NAME, LOCATION, CREATION_DATE, ALBUM_ID) "
+    std::string insertPictureQuery = "INSERT INTO PICTURES (NAME, LOCATION, CREATION_DATE, ALBUM_ID) "
                                      "VALUES (" + std::to_string(picture.getId()) + ", \"" + picture.getName() + "\", \"" 
                                      + picture.getPath() + "\", \"" + picture.getCreationDate() + "\", (SELECT ID FROM ALBUMS WHERE NAME = \"" +
                                      albumName + "\" LIMIT 1));";
@@ -553,6 +548,10 @@ void DatabaseAccess::printUsers()
         {
             std::cout << user << std::endl;
         }
+    }
+    else
+    {
+        throw MyException("No users found in the database.");
     }
 }
 
@@ -857,6 +856,22 @@ bool DatabaseAccess::initializeDatabase()
     {
         return false;
     }
+
+    // Now, update the sequence for USERS and PICTURES
+    // We will need to add 'Dummies' in order to let the sequence set actually work.
+    if (!executeSQL(R"(
+        PRAGMA foreign_keys = OFF;
+        INSERT INTO USERS (NAME) VALUES ('Dummy');
+        INSERT INTO PICTURES (NAME,LOCATION,CREATION_DATE,ALBUM_ID) VALUES ('A','A','1/1/111',-1);
+        UPDATE SQLITE_SEQUENCE SET SEQ = 200 WHERE NAME = 'USERS';
+        UPDATE SQLITE_SEQUENCE SET SEQ = 100 WHERE NAME = 'PICTURES';
+        DELETE FROM USERS WHERE NAME = 'Dummy';
+        DELETE FROM PICTURES WHERE ALBUM_ID = -1;
+        PRAGMA foreign_keys = ON;
+    )"))
+    {
+        return false;
+    }
     
     return true;
 }
@@ -1104,7 +1119,7 @@ int DatabaseAccess::usersCallBack(void* data, int argc, char** argv, char** colN
 
     // Temporary variables that will hold the user's data
     int userId = 0;
-    std::string userName;
+    std::string userName = "";
 
 
     // Process each column in the result row
@@ -1221,6 +1236,55 @@ int DatabaseAccess::getPictureCallBack(void* data, int argc, char** argv, char**
         if (!userIdStr.empty())
         {
             picture->tagUser(std::stoi(userIdStr));
+        }
+    }
+
+    return SQLITE_OK;
+}
+
+int DatabaseAccess::lastUserIdInDatabase()
+{
+    int latestID = 0;
+
+    std::string sqlQuery = "SELECT MAX(ID) FROM USERS;";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &getLastIDCallBack, &latestID, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while getting the last ID of all users.", sqlQuery);
+    }
+
+    return latestID;
+}
+
+int DatabaseAccess::lastPictureIdInDatabase()
+{
+    int latestID = 0;
+
+    std::string sqlQuery = "SELECT MAX(ID) FROM PICTURES;";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &getLastIDCallBack, &latestID, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while getting the last ID of all pictures.", sqlQuery);
+    }
+
+    return latestID;
+}
+
+int DatabaseAccess::getLastIDCallBack(void* data, int argc, char** argv, char** colNames)
+{
+    auto lastId = static_cast<int*>(data);
+
+    // Get the ID from the arguments
+    // Process each column in the result row
+    for (int i = 0; i < argc; i++)
+    {
+        if (colNames[i] == "MAX(ID)")
+        {
+            *lastId = std::stoi(argv[i]);
         }
     }
 

@@ -2,7 +2,7 @@
 #include <string>
 #include <iomanip>	// Will help us format the time
 #include <ctime>	// Will help us get the current time
-#include "MemoryAccess.h"
+#include "DatabaseAccess.h"
 #include "AlbumManager.h"
 
 #define PROGRAMMER "Michael Stregalev"
@@ -60,7 +60,7 @@ int main(void)
 	// Starting to build DatabaseAccess!
 	
 	// initialization data access
-	MemoryAccess dataAccess;
+	DatabaseAccess dataAccess;
 
 	// initialize album manager
 	AlbumManager albumManager(dataAccess);

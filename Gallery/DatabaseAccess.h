@@ -62,6 +62,14 @@ public:
 	virtual std::list<Picture> getTaggedPicturesOfUser(const User& user);
 
 
+	// The following functions are built in order to help us interact with the AlbumManager!
+
+	// Get the last userID in the database (the latest user's ID)
+	int lastUserIdInDatabase();
+	// Get the last pictureID in the database (the lastest picture's ID)
+	int lastPictureIdInDatabase();
+
+
 private:
 
 	// FIELDS!!
@@ -126,4 +134,7 @@ private:
 		Picture& picture;
 		DatabaseAccess* db;
 	};
+
+	// And the callback function for them
+	static int getLastIDCallBack(void* data, int argc, char** argv, char** colNames);
 };
