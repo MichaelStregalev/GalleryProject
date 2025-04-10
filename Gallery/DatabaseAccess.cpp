@@ -5,6 +5,8 @@
 #include "ItemNotFoundException.h"
 #include "Album.h"
 #include "Picture.h"
+#include <list>
+#include <map>
 #include <iostream>
 
 // DEFINE CONSTS OF ALL FIELD NAMES
@@ -14,6 +16,7 @@
 #define CREATION "CREATION_DATE"
 #define ID "ID"
 #define LOCATION "LOCATION"
+#define TAGGED_USERS "TAGGED_USERS"
 
 // DEFINES FOR PREVENTING MAGIC NUMBERS
 
@@ -539,14 +542,17 @@ void DatabaseAccess::printUsers()
         throw FailedSQLQueryException("Error occurred while trying to get the users.", sqlQuery);
     }
 
-    // Printing the users
+    // Printing the users - in case that there are users..
 
-    std::cout << "Users list:" << std::endl;
-    std::cout << "-----------" << std::endl;
-
-    for (const auto& user : usersList)
+    if (!usersList.empty())
     {
-        std::cout << user << std::endl;
+        std::cout << "Users list:" << std::endl;
+        std::cout << "-----------" << std::endl;
+
+        for (const auto& user : usersList)
+        {
+            std::cout << user << std::endl;
+        }
     }
 }
 
@@ -563,23 +569,23 @@ User DatabaseAccess::getUser(int userId)
         throw MyException("User does not exist with the id " + std::to_string(userId));
     }
 
-    // The list of users which will be used in order to fetch the user with the id.
-    // fits the data the callback function expects
-    std::list<User> usersList;
+    // USER fits the data the callback function expects
+    // DEFAULT VALUES OF USER - WILL BE UPDATED AS WE ALREADY CHECKED THAT THE USER WITH THE ID DOES EXIST.
+    User theUser = User(-1, "");
 
     std::string fetchUserQuery = "SELECT * FROM USERS WHERE ID = " + std::to_string(userId) + " LIMIT 1;";
 
     // We now got the users onto a list!
-    int res = sqlite3_exec(_db, fetchUserQuery.c_str(), &usersCallBack, &usersList, nullptr);
+    int res = sqlite3_exec(_db, fetchUserQuery.c_str(), &getUserCallBack, &theUser, nullptr);
 
-    // If an error occurred..
-    if (res != SQLITE_OK)
+    // If an error occurred.. (if SQLITE_OK wasn't the return value of the function, or that the ID is invalid..)
+    if (res != SQLITE_OK || theUser.getId() == -1)
     {
         throw FailedSQLQueryException("Error occurred while trying to get the users.", fetchUserQuery);
     }
 
     // Return the user that was input onto the list of users
-    return usersList.front();
+    return theUser;
 }
 
 bool DatabaseAccess::doesUserExists(int userId)
@@ -590,20 +596,22 @@ bool DatabaseAccess::doesUserExists(int userId)
         throw DatabaseNotOpenException();
     }
 
-    // Building the list of users we will use to figure out if a user with the id given exists.
-    std::list<User> usersList;
+    // USER fits the data the callback function expects
+    // INCASE that the users data does not change - remains invalid -> the user does not exist
+    User theUser = User(-1, "");
 
     std::string sqlQuery = "SELECT * FROM USERS WHERE ID = " + std::to_string(userId) + " LIMIT 1;";
 
     // We now got the users onto a list!
-    int res = sqlite3_exec(_db, sqlQuery.c_str(), &usersCallBack, &usersList, nullptr);
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &getUserCallBack, &theUser, nullptr);
 
     if (res != SQLITE_OK)
     {
         throw FailedSQLQueryException("Error occurred while trying figure out if a user exists.", sqlQuery);
     }
 
-    return !usersList.empty();
+    // If the ID remains INVALID - no user was found in order to replace its data.
+    return !(theUser.getId() == -1);
 }
 
 int DatabaseAccess::countAlbumsOwnedOfUser(const User& user)
@@ -710,6 +718,103 @@ float DatabaseAccess::averageTagsPerAlbumOfUser(const User& user)
 
     // Calculate and return the average of tags in albums the user has been tagged in.
     return static_cast<float>(totalTags) / albumsTaggedCount;
+}
+
+User DatabaseAccess::getTopTaggedUser()
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+
+    // USER fits the data the callback function expects
+    User theUser = User(-1, "");
+
+    std::string sqlQuery = "SELECT USERS.ID, USERS.NAME, COUNT(TAGS.USER_ID) AS TAG_COUNT "
+                           "FROM USERS JOIN TAGS ON USERS.ID = TAGS.USER_ID GROUP BY USERS.ID "
+                           "HAVING TAG_COUNT > 0 "
+                           "ORDER BY TAG_COUNT DESC LIMIT 1;";
+
+    // We now got the users onto a list!
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &getUserCallBack, &theUser, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to find the most tagged user.", sqlQuery);
+    }
+    
+    // If the ID remains INVALID - no user was found in order to replace its data.
+    return theUser;
+}
+
+Picture DatabaseAccess::getTopTaggedPicture()
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+
+    // PICTURE fits the data the callback expects, it will fill its data and change its information to be valid.
+    // DEFAULT VALUES ARE INVALID - IF IT DOES NOT CHANGE, THERE ARE NO PICTURES IN THE DATABASE.
+    Picture mostTaggedPicture = Picture(-1, "");
+
+    // GROUP_CONCAT GROUPS ALL OF THE TAGGED USERS OF THE PICTURE ONTO A STRING THAT IS FORMATTED BY A SEPERATING COMMA.
+    // IT WILL LOOK LIKE THIS:
+    //              TAGGED_USERS
+    //              1,3,10,14
+    // Which resembles the USER IDS of the users that are tagged in the picture.
+
+    std::string sqlQuery = "SELECT PICTURES.ID, PICTURES.NAME, PICTURES.LOCATION, PICTURES.CREATION_DATE, "
+                           "GROUP_CONCAT(TAGS.USER_ID) AS TAGGED_USERS "
+                           "FROM PICTURES LEFT JOIN TAGS ON PICTURES.ID = TAGS.PICTURE_ID "
+                           "GROUP BY PICTURES.ID ORDER BY COUNT(TAGS.USER_ID) DESC LIMIT 1;";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &getPictureCallBack, &mostTaggedPicture, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to find the most tagged picture.", sqlQuery);
+    }
+
+    // Returning the most tagged picture (which is now updated by the callback)
+    return mostTaggedPicture;
+}
+
+std::list<Picture> DatabaseAccess::getTaggedPicturesOfUser(const User& user)
+{
+    // Check if the database is open.. as we can only access it when it is open!
+    // We will also need to check that the user even exists in the database..
+    if (!_db)
+    {
+        throw DatabaseNotOpenException();
+    }
+    else if (!doesUserExists(user.getId()))
+    {
+        throw MyException("User does not exist with the id " + std::to_string(user.getId()));
+    }
+
+    // The list of pictures the user has been tagged in
+    std::list<Picture> taggedPictures;
+
+    // SQL query to select pictures where the user is tagged
+    std::string sqlQuery = "SELECT PICTURES.ID, PICTURES.NAME, PICTURES.LOCATION, PICTURES.CREATION_DATE, GROUP_CONCAT(TAGS.USER_ID) AS TAGGED_USERS "
+                           "FROM PICTURES JOIN TAGS ON PICTURES.ID = TAGS.PICTURE_ID WHERE TAGS.USER_ID = " + std::to_string(user.getId()) +
+                           " GROUP BY PICTURES.ID;";
+
+    int res = sqlite3_exec(_db, sqlQuery.c_str(), &picturesAvailableCallBack, &taggedPictures, nullptr);
+
+    if (res != SQLITE_OK)
+    {
+        throw FailedSQLQueryException("Error occurred while trying to find the pictures a user has been tagged in.", sqlQuery);
+    }
+    else if (taggedPictures.empty())
+    {
+        throw MyException("There are no pictures in which the user has been tagged in.");
+    }
+
+    return taggedPictures;
 }
 
 bool DatabaseAccess::initializeDatabase()
@@ -943,6 +1048,7 @@ int DatabaseAccess::picturesAvailableCallBack(void* data, int argc, char** argv,
     std::string name = "";
     std::string creationDate = "";
     std::string location = "";
+    std::string taggedUsers = "";
 
     // Process each column in the result row
     for (int i = 0; i < argc; i++)
@@ -963,10 +1069,30 @@ int DatabaseAccess::picturesAvailableCallBack(void* data, int argc, char** argv,
         {
             location = argv[i];
         }
+        else if (colNames[i] == TAGGED_USERS)
+        {
+            taggedUsers = argv[i];
+        }
     }
 
     // Add the picture we found onto the list of pictures
     pictureList->emplace_back(pictureId, name, location, creationDate);
+
+    // Now we need to parse the tagged_users string onto different users ids
+
+    // Parse comma-separated list of tagged user IDs
+    std::stringstream ss(taggedUsers);  // Stringstream of the tagged users
+    std::string userIdStr;              // String that will contain each time the different user ids
+
+    // Going through each id that is seperated by a comma
+    while (std::getline(ss, userIdStr, ','))
+    {
+        // If there is still a user left, tag it onto the picture!
+        if (!userIdStr.empty())
+        {
+            pictureList->back().tagUser(std::stoi(userIdStr));
+        }
+    }
 
     return SQLITE_OK;
 }
@@ -1007,6 +1133,96 @@ int DatabaseAccess::tagsCountCallBack(void* data, int argc, char** argv, char** 
 
     // Increment the count of tags
     (*countTags)++;
+
+    return SQLITE_OK;
+}
+
+int DatabaseAccess::getUserCallBack(void* data, int argc, char** argv, char** colNames)
+{
+    auto user = static_cast<User*>(data);
+
+    // Temporary variables that will hold the user's data
+    int userId = 0;
+    std::string userName;
+
+
+    // Process each column in the result row
+    for (int i = 0; i < argc; i++)
+    {
+        if (colNames[i] == ID)
+        {
+            userId = std::stoi(argv[i]);
+        }
+        else if (colNames[i] == NAME)
+        {
+            userName = argv[i];
+        }
+    }
+
+    user->setId(userId);
+    user->setName(userName);
+
+    return SQLITE_OK;
+}
+
+int DatabaseAccess::getPictureCallBack(void* data, int argc, char** argv, char** colNames)
+{
+    auto picture = static_cast<Picture*>(data);
+
+    // Temporary variables to hold the picture's data
+    int pictureId = 0;
+    std::string name = "";
+    std::string creationDate = "";
+    std::string location = "";
+    std::string taggedUsers = "";
+
+    // Process each column in the result row
+    for (int i = 0; i < argc; i++)
+    {
+        if (colNames[i] == ID)
+        {
+            pictureId = std::stoi(argv[i]);
+        }
+        else if (colNames[i] == NAME)
+        {
+            name = argv[i];
+        }
+        else if (colNames[i] == CREATION)
+        {
+            creationDate = argv[i];
+        }
+        else if (colNames[i] == LOCATION)
+        {
+            location = argv[i];
+        }
+        else if (colNames[i] == TAGGED_USERS)
+        {
+            taggedUsers = argv[i];
+        }
+    }
+
+    // Update the data into the picture object
+
+    picture->setId(pictureId);
+    picture->setName(name);
+    picture->setCreationDate(creationDate);
+    picture->setPath(location);
+
+    // Now we need to parse the tagged_users string onto different users ids
+
+    // Parse comma-separated list of tagged user IDs
+    std::stringstream ss(taggedUsers);  // Stringstream of the tagged users
+    std::string userIdStr;              // String that will contain each time the different user ids
+
+    // Going through each id that is seperated by a comma
+    while (std::getline(ss, userIdStr, ','))
+    {
+        // If there is still a user left, tag it onto the picture!
+        if (!userIdStr.empty())
+        {
+            picture->tagUser(std::stoi(userIdStr));
+        }
+    }
 
     return SQLITE_OK;
 }

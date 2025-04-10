@@ -57,6 +57,10 @@ public:
 	virtual int countTagsOfUser(const User& user);
 	virtual float averageTagsPerAlbumOfUser(const User& user);
 
+	virtual User getTopTaggedUser();
+	virtual Picture getTopTaggedPicture();
+	virtual std::list<Picture> getTaggedPicturesOfUser(const User& user);
+
 
 private:
 
@@ -95,6 +99,10 @@ private:
 	static int usersCallBack(void* data, int argc, char** argv, char** colNames);
 	// Callback function of getting the amount of tags of a user
 	static int tagsCountCallBack(void* data, int argc, char** argv, char** colNames);
+	// Callback function of getting a specific user
+	static int getUserCallBack(void* data, int argc, char** argv, char** colNames);
+	// Callback function of getting a single picture
+	static int getPictureCallBack(void* data, int argc, char** argv, char** colNames);
 
 
 
